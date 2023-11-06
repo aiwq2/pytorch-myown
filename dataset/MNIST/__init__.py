@@ -1,0 +1,1 @@
+from .get_mnist import MNIST_Train_data,MNIST_Test_data

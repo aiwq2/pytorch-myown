@@ -34,9 +34,10 @@ class Trainer:
         self.epoch_start=1
 
         # snapshot
-        self.snapshot_path=os.path.join(
-            self.args['model_path']['snapshot_dir'],self.args['datetime']
-        )
+        # self.snapshot_path=os.path.join(
+        #     self.args['model_path']['snapshot_dir'],self.args['datetime']
+        # )
+        self.snapshot_path=self.args['model_path']['snapshot_dir']
         self.snapshot=None
 
 
@@ -48,22 +49,29 @@ class Trainer:
         if self.args['device']!='CPU':
             self.gpu_id=int(os.environ['LOCAL_RANK'])
             
-            self.snapshot=self.load_snapshot()
+            if self.args['get_from_snapshot']:
+                self.snapshot=self.load_snapshot()
 
-            if self.snapshot is not None:
-                self.epoch_start = self.snapshot["EPOCHS_RUN"] + 1
-                model.load_state_dict(self.snapshot["MODEL_STATE"])
+                if self.snapshot is not None:
+                    self.epoch_start = self.snapshot["EPOCHS_RUN"] + 1
+                    model.load_state_dict(self.snapshot["MODEL_STATE"])
+                else:
+                    self.logger.error('we need snapshot path,but we did not get')
+                    raise ValueError('snapshot path is not given')
             
             self.model = DistributedDataParallel(
                 model.to(self.gpu_id), find_unused_parameters=False
             )
         else:
             self.gpu_id=None
-
-            self.snapshot=self.load_snapshot()
-            if self.snapshot:
-                self.epoch_start=self.snapshot('EPOCHS_RUN')+1
-                model.load_state_dict(self.snapshot["MODEL_STATE"])
+            if self.args['get_from_snapshot']:
+                self.snapshot=self.load_snapshot()
+                if self.snapshot:
+                    self.epoch_start=self.snapshot('EPOCHS_RUN')+1
+                    model.load_state_dict(self.snapshot["MODEL_STATE"])
+                else:
+                    self.logger.error('we need snapshot path,but we did not get')
+                    raise ValueError('snapshot path is not given')
 
             self.model = model
 
@@ -91,7 +99,7 @@ class Trainer:
             self.scheduler.load_state_dict(self.snapshot["SCHEDULER_STATE"])
 
         self.tensorboard_writer=SummaryWriter(
-            os.path.join('runs',args['datetime'],args['device'])
+            os.path.join('tensorboard_result',args['datetime'],args['device'])
         )
 
         self.early_stop_sign=deque(maxlen=args['early_stop'])            
@@ -125,6 +133,9 @@ class Trainer:
         elif self.args['criterion']=='FocalLoss':
             from loss.FocalLoss import FocalLoss
             return FocalLoss()
+        else:
+            self.args.error('we cannot get criterion:{} you need,pls checkout!'.format(self.args['criterion']))
+            raise ValueError('cannot get criterion')
         
     # 获取模型优化器和调度器
     def get_optimizer_and_scheduler(self):
@@ -140,7 +151,7 @@ class Trainer:
         scheduler=get_scheduler(
             self.args['scheduler']['name'],
             optimizer,
-            num_training_all_steps*self.args['schedular']['ratio'],
+            num_training_all_steps*self.args['scheduler']['ratio'],
             num_training_all_steps
         )
         return optimizer,scheduler
@@ -167,7 +178,7 @@ class Trainer:
         return AdamW(optimizer_grouped_parameters,lr=self.args['lr'])
 
     def prepare_dataloader(self,dataset,batch_size):
-        if self.gpu_id:
+        if self.gpu_id>=0:
             return DataLoader(
                 dataset,
                 batch_size=batch_size,
@@ -224,9 +235,11 @@ class Trainer:
         ):
             progress.start() 
 
-        # 开始循环训练           
+        # 开始循环训练   
+        self.logger.info('begin to train')        
         for epoch in range(1,self.args['max_epochs']+1):
 
+            self.logger.trace('-'*20)
             if epoch<self.epoch_start:
                 progress.update(rich_epoch_id,advance=1)
                 continue
@@ -246,10 +259,12 @@ class Trainer:
             )
             self.logger.info(f"Train Eval Epoch: {epoch} Metrics: {metrics_train}")
             # 评估模型在验证集上面的效果
-            metrics_eval = self.eval_one_epoch(
-                dataloader=self.eval_dataloader, task_id=rich_eval_step_id
-            )
-            self.logger.info(f"Eval Epoch: {epoch} Metrics: {metrics_eval}")
+            metrics_eval=None
+            if self.eval_dataset:
+                metrics_eval = self.eval_one_epoch(
+                    dataloader=self.eval_dataloader, task_id=rich_eval_step_id
+                )
+                self.logger.info(f"Eval Epoch: {epoch} Metrics: {metrics_eval}")
 
             barrier()
 
@@ -258,8 +273,9 @@ class Trainer:
                 self.args["device"] != "CPU"
                 and self.args["device"] == self.args["global_device"]
             ):
-                if self.judge_whether_save(epoch,metrics_eval):
-                    return
+                if self.eval_dataset:
+                    if self.judge_whether_save(epoch,metrics_eval):
+                        return
                 
             # 更新进度条
             progress.update(rich_epoch_id, advance=1)
@@ -340,6 +356,28 @@ class Trainer:
         return sum(loss_list)/len(loss_list)
     
     def eval_one_epoch(self,task_id,dataloader):
+
+            #         gathered_image_features = [
+            #     torch.zeros_like(image_features) for _ in range(world_size)
+            # ]
+            # gathered_text_features = [
+            #     torch.zeros_like(text_features) for _ in range(world_size)
+            # ]
+            
+            # dist.all_gather(gathered_image_features, image_features)
+            # dist.all_gather(gathered_text_features, text_features)
+
+            # all_image_features = torch.cat(
+            #     [image_features]
+            #     + gathered_image_features[:rank]
+            #     + gathered_image_features[rank + 1 :]
+            # )
+            # all_text_features = torch.cat(
+            #     [text_features]
+            #     + gathered_text_features[:rank]
+            #     + gathered_text_features[rank + 1 :]
+            # )
+
         self.model.eval()
 
         progress.reset(task_id)
@@ -395,16 +433,20 @@ class Trainer:
     
 
     def one_batch(self,data,mode):
-        data_need_to_cuda, data_cpu = data
-        for data_name in data_need_to_cuda:
-            data_need_to_cuda[data_name] = data_need_to_cuda[data_name].to(
-                self.gpu_id, dtype=torch.long
-            )
-
+        data_need_to_cuda, labels = data
+        if isinstance(data_need_to_cuda,list):
+            for data_name in data_need_to_cuda:
+                data_need_to_cuda[data_name] = data_need_to_cuda[data_name].to(
+                    self.gpu_id, dtype=torch.long
+                )
+        else:
+            data_need_to_cuda=data_need_to_cuda.to(self.gpu_id)
+            labels=labels.to(self.gpu_id)
+        
         if mode=='train':
             self.optimizer.zero_grad()
-            loss_single=self.model('train',self.criterion,**data_need_to_cuda)
-            
+            loss_single=self.model(mode,self.criterion,data_need_to_cuda,labels)
+
 
             loss_single.backward()
             self.optimizer.step()
@@ -413,23 +455,29 @@ class Trainer:
         
         elif mode=='eval':
             with torch.no_grad():
-                return self.mode('eval',self.criterion,**data_need_to_cuda)
+                return self.model(mode,self.criterion,data_need_to_cuda,labels)
             
         
     def write_tensorboard(self,epoch, loss, metrics_train, metrics_eval):
         self.tensorboard_writer.add_scalar(f'Loss',loss,epoch)
-        for i in list(metrics_train.keys()):
-            self.tensorboard_writer.add_scalar(
-                f'{i}',
-                {'Train_'+i:metrics_train[i],'Eval_'+i:metrics_eval[i]},
-                epoch+1
-            )
-
+        for metric in list(metrics_train.keys()):
+            if metrics_eval:
+                self.tensorboard_writer.add_scalars(
+                    f'{metric}/',
+                    {'Train_'+metric:metrics_train[metric],'Eval_'+metric:metrics_eval[metric]},
+                    epoch+1
+                )
+            else:
+                self.tensorboard_writer.add_scalar(
+                    f'{metric}',
+                    metrics_train[metric],
+                    epoch+1
+                )
 
     def judge_whether_save(self,epoch,metrics):
         if metrics[self.args["main_metric"]] > self.best_metric:
             self.logger.info(
-                f"Best Metrics Now: {metrics[self.args['main_metric']]} > Best Metrics Before: {self.best_metric}"
+                f"Best Metrics Now: {self.args['main_metric']}:{metrics[self.args['main_metric']]} > Best Metrics Before:{self.args['main_metric']}: {self.best_metric}"
             )
             self.best_metric = metrics[self.args["main_metric"]]
             if self.args["model_path"]["save"]:
@@ -442,7 +490,7 @@ class Trainer:
                 self.logger.info(
                     f'The Effect of last {self.args["early_stop"]} epochs has not improved! Early Stop!'
                 )
-                self.logger.info(f'Best Metric:{self.best_metric}')
+                self.logger.info(f"Best Metric:{self.args['main_metric']}:{self.best_metric}")
                 return True
         return False
 

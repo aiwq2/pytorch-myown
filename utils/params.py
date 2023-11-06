@@ -15,7 +15,6 @@ def config_args():
     parser.add_argument('--datetime',type=str,required=True,help='datetime')
 
     args=parser.parse_args()
-
     args=get_other_config(args)
 
     return args

@@ -1,3 +1,5 @@
+modal: 'img'
+get_from_snapshot: False
 model_path:
   pretrained_model_dir: "pretrained_model"
   pretrained_model: "bert-base-uncased"
@@ -5,33 +7,27 @@ model_path:
   save: False
   snapshot_dir: "save_models"
   snapshot: "best_snapshot.pt"
+split_dataset: True
+split_test_ratio: 0.2
 data_path:
   data_dir: "data/VAST/"
   train: "vast_train.csv"
   eval: "vast_test.csv"
   predict: "vast_test.csv"
-criterion: "DualLoss"
-optimizer: "AdamW"
+criterion: "CrossEntropyLoss" # DualLoss,FocalLoss
+optimizer: "AdamW" # AdamW
 scheduler:
   name: "constant"
   ratio: 0.1
-metrics: "StanceVAST"
-main_metric: "zero_avg"
+metrics: "F1score_Precision_Recall" # F1score_Precision_Recall
+main_metric: "F1score"
 mode: 'train'
 batch_size:
   train: 64
-  eval: 512
-max_epochs: 100
+  eval: 64
+max_epochs: 5
 wd: 0.001
 seed: 42
 early_stop: 100
-lr: 0.00002
+lr: 0.001
 dropout: 0.0
-StanceVAST:
-  max_topic_length: 32
-  max_text_length: 256
-  cls_t: 50.0
-  token_t: 15.0
-  num_classes: 3
-  max_text_length: 256
-  cls_loss_weight: 0.2
