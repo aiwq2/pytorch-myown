@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
+from torch.optim import AdamW,SGD
 from utils.rich_tqdm import progress
 from utils.metrics import calculate_metrics
 from torch.utils.data import Dataset, DataLoader
@@ -133,6 +133,9 @@ class Trainer:
         elif self.args['criterion']=='FocalLoss':
             from loss.FocalLoss import FocalLoss
             return FocalLoss()
+        elif self.args['criterion']=='PairwiseLoss':
+            from loss.PairwiseLoss import PairwiseLoss
+            return PairwiseLoss()
         else:
             self.args.error('we cannot get criterion:{} you need,pls checkout!'.format(self.args['criterion']))
             raise ValueError('cannot get criterion')
@@ -141,6 +144,8 @@ class Trainer:
     def get_optimizer_and_scheduler(self):
         if self.args['optimizer']=='AdamW':
             optimizer=self.modified_optimizer()
+        elif self.args['optimizer']=='SGD':
+            optimizer=SGD(self.model.parameters(),lr=self.args['lr'],weight_decay=self.args['wd'],momentum=self.args['momentum'])
         else:
             self.logger.error('Unrecoginized Optimizer')
             exit()
@@ -389,6 +394,7 @@ class Trainer:
         for _,eval_data in enumerate(dataloader):
             eval_result=self.one_batch(eval_data,'eval')
 
+            # len(eval_result)是model返回的元组的长度，这里为2，一个是label，一个是预测值
             while len(self.all_eval_result)!=len(eval_result):
                 self.all_eval_result.append(
                     [[] for i in range(self.args['world_size'])]
@@ -446,7 +452,7 @@ class Trainer:
         
         if mode=='train':
             self.optimizer.zero_grad()
-            loss_single=self.model(mode,self.criterion,data_need_to_cuda,labels)
+            loss_single=self.model(mode,self.criterion,data_need_to_cuda,labels,self.args['extra']['delta'])
 
 
             loss_single.backward()
@@ -456,7 +462,7 @@ class Trainer:
         
         elif mode=='eval':
             with torch.no_grad():
-                return self.model(mode,self.criterion,data_need_to_cuda,labels)
+                return self.model(mode,self.criterion,data_need_to_cuda,labels,self.args['extra']['delta'])
             
         
     def write_tensorboard(self,epoch, loss, metrics_train, metrics_eval):

@@ -11,7 +11,7 @@ from model.CNN import MyCNN,init_MyCNN
 from model.Resnet import ResNet
 from model.model_init import init_model
 from utils.dataset_split import dataset_split_sklearn,dataset_split_torch
-
+import sys
 
 
 
@@ -41,7 +41,7 @@ if __name__=='__main__':
         train_dataset,eval_dataset=dataset_split_torch(train_dataset,test_size=args['split_test_ratio'])
            
     args['logger'].info(f'train_dataset total length:{len(train_dataset)},eval_dataset total length:{len(eval_dataset) if eval_dataset else 0}, predict_dataset total length:{len(predict_dataset)}')
-
+    sys.exit()
     # 定义
     model=ResNet()
     model.blur.apply(init_model)

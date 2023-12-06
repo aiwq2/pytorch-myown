@@ -22,14 +22,19 @@ class ResNet(nn.Module):
         return output
 
     # 这里的criterion使用PairwiseLoss
-    def forward(self,mode,criterion,input1,intpu2,labels):
+    def forward(self,mode,criterion,input1,intpu2,labels,delta):
         output1=self.forward_once(input1)
         output2=self.forward_once(intpu2)
         if mode=='train':
             loss=criterion(output1,output2,labels)
             return loss
         elif mode=='eval':
-            return labels,output1-output2
+            score_delta=output1-output2
+            # 超参数
+            score_delta[torch.abs(score_delta)<delta]=0
+            score_delta[score_delta>delta]=1
+            score_delta[score_delta<-delta]=-1
+            return labels,score_delta
         return output1,output2
 
 rnet=ResNet()

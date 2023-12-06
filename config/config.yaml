@@ -13,13 +13,16 @@ scheduler:
   name: "constant"
   ratio: 0.1
 metrics: "F1score_Precision_Recall" # F1score_Precision_Recall
-main_metric: "F1score"
+main_metric: "Precision"
 batch_size:
   train: 64
   eval: 64
 max_epochs: 5
 wd: 0.001
+momentum: 0 # SGD优化器中可能用到
 seed: 42
 early_stop: 100
 lr: 0.001
 dropout: 0.0
+extra:
+  delta: 0.1

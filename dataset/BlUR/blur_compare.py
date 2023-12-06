@@ -4,7 +4,7 @@ from torchvision import transforms
 from PIL import Image
 
 class BlurPair(Dataset):
-    def __init__(self,root='result') -> None:
+    def __init__(self,root='compare_result') -> None:
         super().__init__()
         self.img_pairs=[]
         self.labels=[]
