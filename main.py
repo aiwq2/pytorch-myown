@@ -6,7 +6,10 @@ from trainer import Trainer
 from utils.get_bert_and_tokenizer import getBert
 from torch.distributed import destroy_process_group
 from dataset.MNIST import MNIST_Test_data,MNIST_Train_data
+from dataset.BlUR.blur_compare import BlurPair
 from model.CNN import MyCNN,init_MyCNN
+from model.Resnet import ResNet
+from model.model_init import init_model
 from utils.dataset_split import dataset_split_sklearn,dataset_split_torch
 
 
@@ -29,18 +32,19 @@ if __name__=='__main__':
         args['logger'].info(f'{k}:{v}')
 
     # 定义dataset
-    train_dataset=MNIST_Train_data
-    eval_dataset=None
-    predict_dataset=MNIST_Test_data
+    train_dataset=BlurPair()
+    eval_dataset=[]
+    predict_dataset=[]
 
+    # 划分训练集和验证集
     if args['split_dataset']:
         train_dataset,eval_dataset=dataset_split_torch(train_dataset,test_size=args['split_test_ratio'])
            
     args['logger'].info(f'train_dataset total length:{len(train_dataset)},eval_dataset total length:{len(eval_dataset) if eval_dataset else 0}, predict_dataset total length:{len(predict_dataset)}')
 
     # 定义
-    model=MyCNN(args)
-    model.apply(init_MyCNN)
+    model=ResNet()
+    model.blur.apply(init_model)
 
 
 

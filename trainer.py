@@ -214,6 +214,7 @@ class Trainer:
             description="Train Step", total=len(self.train_dataloader)
         )
 
+        # 相当于用训练集来进行了验证
         self.train_eval_dataloader = self.prepare_dataloader(
             self.train_dataset, self.args["batch_size"]["eval"]
         )
@@ -274,7 +275,7 @@ class Trainer:
                 and self.args["device"] == self.args["global_device"]
             ):
                 if self.eval_dataset:
-                    if self.judge_whether_save(epoch,metrics_eval):
+                    if self.judge_whether_save_and_stop(epoch,metrics_eval):
                         return
                 
             # 更新进度条
@@ -332,10 +333,10 @@ class Trainer:
             progress.start()
 
         # 给测试集打标签
-        label = self.predict_one_epoch(
+        result = self.predict_one_epoch(
             dataloader=self.predict_dataloader, task_id=rich_predict_step_id
         )
-        self.logger.info(label)
+        self.logger.info(result)
 
         self.logger.info("Predict Finished")
 
@@ -422,13 +423,13 @@ class Trainer:
 
         progress.reset(task_id)
 
-        label_list=[]
+        result_list=[]
         for _,eval_data in enumerate(dataloader):
-            _,label_single=self.one_batch(eval_data,'eval')
-            label_list.extend(label_single)
+            _,result_single=self.one_batch(eval_data,'eval')
+            result_list.extend(result_single)
             progress.update(task_id,advance=1)
 
-        return label_list
+        return result_list
             
     
 
@@ -474,7 +475,7 @@ class Trainer:
                     epoch+1
                 )
 
-    def judge_whether_save(self,epoch,metrics):
+    def judge_whether_save_and_stop(self,epoch,metrics):
         if metrics[self.args["main_metric"]] > self.best_metric:
             self.logger.info(
                 f"Best Metrics Now: {self.args['main_metric']}:{metrics[self.args['main_metric']]} > Best Metrics Before:{self.args['main_metric']}: {self.best_metric}"

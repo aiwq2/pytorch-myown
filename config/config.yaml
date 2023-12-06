@@ -1,27 +1,19 @@
 modal: 'img'
-get_from_snapshot: False
+mode: 'train'
+get_from_snapshot: False # 控制是否使用snapshot中的model
 model_path:
-  pretrained_model_dir: "pretrained_model"
-  pretrained_model: "bert-base-uncased"
-  tokenizer: "bert-base-uncased"
-  save: False
+  save: False # 是否需要保存模型
   snapshot_dir: "save_models"
   snapshot: "best_snapshot.pt"
 split_dataset: True
 split_test_ratio: 0.2
-data_path:
-  data_dir: "data/VAST/"
-  train: "vast_train.csv"
-  eval: "vast_test.csv"
-  predict: "vast_test.csv"
-criterion: "CrossEntropyLoss" # DualLoss,FocalLoss
-optimizer: "AdamW" # AdamW
+criterion: "CrossEntropyLoss" # 支持loss文件夹下所有的loss
+optimizer: "AdamW" # 目前支持AdamW
 scheduler:
   name: "constant"
   ratio: 0.1
 metrics: "F1score_Precision_Recall" # F1score_Precision_Recall
 main_metric: "F1score"
-mode: 'train'
 batch_size:
   train: 64
   eval: 64
