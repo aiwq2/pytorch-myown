@@ -6,10 +6,11 @@ from trainer import Trainer
 from utils.get_bert_and_tokenizer import getBert
 from torch.distributed import destroy_process_group
 from dataset.MNIST import MNIST_Test_data,MNIST_Train_data
-from dataset.BlUR.blur_compare import BlurPair
-from model.CNN import MyCNN,init_MyCNN
+from dataset.BlUR.BlurDataset import BlurPair,BlurPairFeature
 from model.Resnet import ResNet
-from model.model_init import init_model
+from model.VIT import VIT
+from model.CNN import LinearNet
+from model.general.model_init import xavier_init_model,kaiming_init_model
 from utils.dataset_split import dataset_split_sklearn,dataset_split_torch
 import sys
 
@@ -31,22 +32,51 @@ if __name__=='__main__':
     for k,v in sorted(args.items(),key=lambda x:x[0]):
         args['logger'].info(f'{k}:{v}')
 
+    # 自定义一些操作
+    with open('score_delta.txt','w') as out:
+        pass
+    if os.path.exists('score_delta.csv'):
+        args['logger'].info('score_delta exists,remove score_delta.csv')
+        os.remove('score_delta.csv')
+    # if os.path.exists('score_delta_LinearNet.csv'):
+    #     args['logger'].info('score_delta exists,remove score_delta_LinearNet.csv')
+    #     os.remove('score_delta_LinearNet.csv')
+
     # 定义dataset
-    train_dataset=BlurPair()
-    eval_dataset=[]
-    predict_dataset=[]
+    train_dataset=BlurPair(mode='train')
+    eval_dataset=BlurPair(mode='eval')
+    predict_dataset=BlurPair(mode='predict')
 
     # 划分训练集和验证集
-    if args['split_dataset']:
+    if args['split_dataset'] and eval_dataset is None:
         train_dataset,eval_dataset=dataset_split_torch(train_dataset,test_size=args['split_test_ratio'])
+    
+    # 保存训练集和验证集
+    # for index,dataset in enumerate([train_dataset,eval_dataset]):
+    #     file_name=''
+    #     if index==0:
+    #         file_name='train.txt'
+    #     else:
+    #         file_name='evl.txt'
+    #     with open(file_name,'w') as out:
+    #         for data in dataset:
+    #             label=data[1]
+    #             img_pair=data[2]
+    #             img0=img_pair[0]
+    #             img1=img_pair[1]
+    #             out.write(f'{img0},{img1},{label}\n')
+
+
+
            
-    args['logger'].info(f'train_dataset total length:{len(train_dataset)},eval_dataset total length:{len(eval_dataset) if eval_dataset else 0}, predict_dataset total length:{len(predict_dataset)}')
-    sys.exit()
+    
     # 定义
     model=ResNet()
-    model.blur.apply(init_model)
+    model.blur.apply(kaiming_init_model)
 
-
+    args['logger'].info(f'train_dataset total length:{len(train_dataset)},eval_dataset total length:{len(eval_dataset) if eval_dataset else 0}, predict_dataset total length:{len(predict_dataset)}')
+    args['logger'].info(f'train_dataset:{train_dataset.__class__.__name__}')
+    args['logger'].info(f'model:{model.__class__.__name__}')
 
     trainer=Trainer(
         args=args,

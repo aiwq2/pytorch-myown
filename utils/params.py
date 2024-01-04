@@ -65,7 +65,7 @@ def get_device(args):
 def ddp_setup():    
     # 以nccl后端方式建立进程间通信
     dist.init_process_group(backend='nccl')
-    torch.cuda.set_device(int(os.environ['LOCAL_RANK']))
+    torch.cuda.set_device(int(os.environ['LOCAL_RANK']))# 相当于CUDA_VISIBLE_DEVICES环境变量
 
 def check_ddp_var(my_logger):
     for var in ENVIRONMENT_VARIABLES:

@@ -25,7 +25,7 @@ class DDPLogger:
             "{name}:{module}.{function}:{line}-{message}",
             encoding='utf-8',
             rotation="500 MB",
-            retention='1 month',
+            retention='2 month',
         )
         self.log=logger.bind(device=device)
 

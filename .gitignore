@@ -1,3 +1,14 @@
-log
-tensorborad
-tensorboard_result
+/log/
+/tensorborad/
+/tensorboard_result/
+/temp/
+.amlignore
+.amlignore.amltmp
+__pycache__/
+/dataset/BlUR/online_test_img
+/dataset/BlUR/online_test_img2
+/dataset/BlUR/editor_merge
+/dataset/BlUR/editor
+/dataset/BlUR/*.txt
+/*.csv
+/*.txt

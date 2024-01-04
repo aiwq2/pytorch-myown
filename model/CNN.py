@@ -1,4 +1,7 @@
 import torch.nn as nn
+import torch
+import os
+import pandas as pd
 
 class CNN(nn.Module):
     def __init__(self) -> None:
@@ -68,6 +71,56 @@ class MyCNN(nn.Module):
             )
         return x
 
+class LinearNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.blur=nn.Sequential(
+            nn.Linear(100,256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256,512),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(512,256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256,128),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool1d(1),
+            nn.Sigmoid()
+        )
+
+    def forward_once(self,input):
+        output=self.blur(input)
+        return output
+
+    def forward(self,epoch,mode,criterion,labels,contents,delta,input1,input2=None):
+        output1=self.forward_once(input1)
+        if input2 is not None:
+            output2=self.forward_once(input2)
+        if mode=='train':
+            loss=criterion(output1,output2,labels)
+            return loss
+        elif mode=='eval':
+            score_delta=output1-output2
+            if os.path.exists('score_delta_LinearNet.csv'):
+                df=pd.read_csv('score_delta_LinearNet.csv')
+            else:
+                df=pd.DataFrame(columns=['epoch','label','pred','score_delta','img1','img2','score1','score2'])
+            df_new=pd.DataFrame({'label':labels.cpu().numpy().tolist(),'score_delta':score_delta.cpu().numpy().flatten().tolist(),'img1':list(contents[0]),'img2':list(contents[1]),'score1':output1.cpu().numpy().flatten().tolist(),'score2':output2.cpu().numpy().flatten().tolist()})
+            df_new['pred']=df_new['score_delta'].apply(lambda x:1 if x>delta else (-1 if x<-delta else 0))
+            df_new['epoch']=[epoch]*len(df_new)
+            df=pd.concat([df,df_new],axis=0)
+            df.to_csv('score_delta_LinearNet.csv',index=False)
+            # 超参数 delta
+            score_delta[torch.abs(score_delta)<delta]=0
+            score_delta[score_delta>delta]=1
+            score_delta[score_delta<-delta]=-1
+            return labels.cpu().numpy().tolist(),score_delta.cpu().numpy().tolist()
+        elif mode=='predict':
+            return output1
+        else:
+            raise ValueError('mode should be train or eval or predict')
 
     
     
