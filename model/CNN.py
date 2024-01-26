@@ -71,6 +71,7 @@ class MyCNN(nn.Module):
             )
         return x
 
+# 全为Linear层的网络，这是我自定义的
 class LinearNet(nn.Module):
     def __init__(self) -> None:
         super().__init__()

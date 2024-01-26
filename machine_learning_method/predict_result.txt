@@ -1,0 +1,9 @@
+../dataset/BlUR/gptv_2cls/test_word/0.99_AA1bv9L4.jpg,0,0.011563204661730593
+../dataset/BlUR/gptv_2cls/test_word/5_AA1h80Jb.jpg,0,0.3038788786563325
+../dataset/BlUR/gptv_2cls/test_word/5_AA1hEYh1.jpg,0,0.38913365233738173
+../dataset/BlUR/gptv_2cls/test_word/75_AA1h1Vyo.jpg,0,0.09944747980153154
+../dataset/BlUR/gptv_2cls/test_word/85_AA1gRzSP.jpg,0,0.3334821870494702
+../dataset/BlUR/gptv_2cls/test_word/Picture1.jpg,1,0.9792102699435585
+../dataset/BlUR/gptv_2cls/test_word/Picture2.jpg,1,0.9914275825152593
+../dataset/BlUR/gptv_2cls/test_word/Picture3.jpg,0,0.3603162258480301
+../dataset/BlUR/gptv_2cls/test_word/Picture4.jpg,1,0.90081402106326

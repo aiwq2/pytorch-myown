@@ -51,7 +51,14 @@ class ResNet(nn.Module):
         return output
 
     # 这里的criterion使用PairwiseLoss
-    def forward(self,epoch,mode,criterion,labels,contents,delta,input1,input2=None):
+    def forward(self,**contents):
+        epoch=contents['epoch']
+        mode=contents['mode']
+        criterion=contents['criterion']
+        labels=contents['labels']
+        delta=contents['extra']['delta']
+        input1=contents['input'][0]
+        input2=None
         output1=self.forward_once(input1)
         if input2 is not None:
             output2=self.forward_once(input2)
@@ -91,8 +98,38 @@ class ResNet(nn.Module):
         else:
             raise ValueError('mode should be train or eval or predict')
 
-# rnet=ResNet()
-# for k,v in rnet.named_buffers():
-#     print(f'{k}:{v.requires_grad}')
-# output=rnet(torch.randn(1,3,256,412))
-# print(output)
+class BlurSingleResNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.model=models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        for k,v in self.model.named_parameters():
+            v.requires_grad=False
+        self.single_blur=nn.Sequential(
+            # 最后直接试一下nn.Linear(1000,2)?
+            nn.Linear(1000,512),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(512,128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128,2),
+            # nn.Linear(1000,2),
+        )
+
+    def forward(self,**content):
+        input=content['input']
+        mode=content['mode']
+        criterion=content['criterion']
+        labels=content['labels']
+        output=self.model(input)
+        output=self.single_blur(output)
+        if mode=='train':
+            loss=criterion(output,labels)
+            return loss
+        elif mode=='eval':
+            loss=criterion(output,labels)
+            return (labels.cpu().numpy().tolist(),output.argmax(dim=-1).cpu().numpy().tolist(),output.softmax(dim=-1)[:,1].cpu().numpy().tolist()),loss.item()
+        elif mode=='predict':
+            return (output.argmax(dim=-1).cpu().numpy().tolist(),output.softmax(dim=-1)[:,1].cpu().numpy().tolist())
+        else:
+            raise ValueError('mode should be train or eval or predict')

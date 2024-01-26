@@ -4,11 +4,9 @@
 /temp/
 .amlignore
 .amlignore.amltmp
-__pycache__/
-/dataset/BlUR/online_test_img
-/dataset/BlUR/online_test_img2
-/dataset/BlUR/editor_merge
-/dataset/BlUR/editor
-/dataset/BlUR/*.txt
+**/__pycache__
+/dataset/BlUR/*
 /*.csv
 /*.txt
+/save_models/
+/dataset/BlUR/url_100000*

@@ -262,25 +262,9 @@ class Trainer:
 
             self.logger.info(f'Train Epoch:{epoch} Loss:{loss}')
             torch.cuda.empty_cache()
-            metrics_train=None
-
-            # # 评估模型在训练集上的效果
-            # metrics_train,train_loss=self.eval_one_epoch(
-            #     dataloader=self.train_eval_dataloader,task_id=rich_train_eval_step_id,epoch=epoch
-            # )
-            # self.logger.info(f"Train Eval Epoch: {epoch} Metrics: {metrics_train}")
-
-            # 评估模型在验证集上面的效果
-            metrics_eval=None
-            if self.eval_dataset:
-                metrics_eval,evl_loss = self.eval_one_epoch(
-                    dataloader=self.eval_dataloader, task_id=rich_eval_step_id,epoch=epoch
-                )
-                self.logger.info(f'learning rate:{self.optimizer.param_groups[0]["lr"]}')
-                self.logger.info(f"Eval Epoch: {epoch} Loss: {evl_loss}")
-                self.logger.info(f"Eval Epoch: {epoch} Metrics: {metrics_eval}")
-
-            barrier()
+            
+            # 针对训练集和验证集进行评估
+            metrics_train,metrics_eval,train_loss,evl_loss=self.evl_on_train_and_val(rich_train_eval_step_id,rich_eval_step_id,epoch)
 
             if self.args['use_tensorboard']:
                 write_tensorboard(self.tensorboard_writer,epoch,loss,evl_loss,metrics_train,metrics_eval,self.args['metric_average'])
@@ -333,18 +317,9 @@ class Trainer:
         ):
             progress.start()
 
-        # 评估模型在训练集上面的效果
-        metrics,train_loss = self.eval_one_epoch(
-            dataloader=self.train_eval_dataloader, task_id=rich_train_eval_step_id
-        )
-        self.logger.info(f"Train Eval loss: {train_loss}")
-        self.logger.info(f"Train Eval Metrics: {metrics}")
-        # 评估模型在验证集上面的效果
-        metrics,eval_loss = self.eval_one_epoch(
-            dataloader=self.eval_dataloader, task_id=rich_eval_step_id
-        )
-        self.logger.info(f"Eval loss: {eval_loss}")
-        self.logger.info(f"Eval Metrics: {metrics}")
+        epoch=1
+        self.evl_on_train_and_val(rich_train_eval_step_id,rich_eval_step_id,epoch)
+
     
     def eval_one_epoch(self,task_id,dataloader,epoch=0):
 
@@ -407,11 +382,31 @@ class Trainer:
             
             return calculate_metrics(
                 self.logger,
-                self.args['metrics'],
                 self.all_eval_result
             ),sum(self.all_loss_list[0])/len(self.all_loss_list[0])
         else:
             return {'Not Main Process':0.0}
+        
+    def evl_on_train_and_val(self,rich_train_eval_step_id,rich_eval_step_id,epoch):
+        # 评估模型在训练集上的效果 
+        metrics_train=None
+        metrics_train,train_loss=self.eval_one_epoch(
+            dataloader=self.train_eval_dataloader,task_id=rich_train_eval_step_id,epoch=epoch
+        )
+        self.logger.info(f"Train Eval Epoch: {epoch} Metrics: {metrics_train}")
+
+        # 评估模型在验证集上面的效果
+        metrics_eval=None
+        if self.eval_dataset:
+            metrics_eval,evl_loss = self.eval_one_epoch(
+                dataloader=self.eval_dataloader, task_id=rich_eval_step_id,epoch=epoch
+            )
+            self.logger.info(f'learning rate:{self.optimizer.param_groups[0]["lr"]}')
+            self.logger.info(f"Eval Epoch: {epoch} Loss: {evl_loss}")
+            self.logger.info(f"Eval Epoch: {epoch} Metrics: {metrics_eval}")
+
+        barrier()
+        return metrics_train,metrics_eval,train_loss,evl_loss
     # 预测主函数
     def predict(self):
         self.predict_dataloader = self.prepare_dataloader(
@@ -433,10 +428,21 @@ class Trainer:
             dataloader=self.predict_dataloader, task_id=rich_predict_step_id
         )
         # self.logger.info(result)
-        file_save='online_data_test_result_iteration13.txt'
-        with open(file_save,'w') as out:
-            for label,img in result:
-                out.write(f'{label.item():.2f},{img}\n')
+        file_save='url_270000_img_1w-2w.txt'
+        if len(result[0])==3:
+            with open(file_save,'w') as out:
+                for label,pred,img in result:
+                    if pred>0.5:
+                        label='1'
+                    else:
+                        label='0'
+                    out.write(f'{img},{label},{str(pred)}\n')
+        elif len(result[0])==2:
+            with open(file_save,'w') as out:
+                for pred,img in result:
+                    out.write(f'{img},{str(pred.item())}\n')
+        else:
+            raise ValueError('result length is not 2 or 3')
         self.logger.info(f"Predict Result Saved at {file_save}")
         self.logger.info("Predict Finished")
 
@@ -448,14 +454,20 @@ class Trainer:
         result_list=[]
         for _,eval_data in enumerate(dataloader):
             result_single,imgs=self.one_batch(eval_data,'predict')
-            combined_list=[(a, b) for a, b in zip(result_single, imgs)]
+            if isinstance(result_single,(tuple,list)):
+                result_label=result_single[0]
+                result_pred=result_single[1]
+                combined_list=[(a, b,c) for a, b,c in zip(result_label,result_pred, imgs)]
+            else:
+                combined_list=[(a, b) for a, b in zip(result_single, imgs)]
             result_list.extend(combined_list)
             progress.update(task_id,advance=1)
 
         return result_list
     
     def one_batch(self,data,mode,epoch=0):
-        data_need_to_cuda, labels,contents = data
+        data_need_to_cuda, labels,img_path = data
+        # data_need_to_cuda, labels,contents = data
        
         if isinstance(data_need_to_cuda,list):
             for data_name_index in range(len(data_need_to_cuda)):
@@ -463,18 +475,25 @@ class Trainer:
                     data_need_to_cuda[data_name_index] = data_need_to_cuda[data_name_index].to(
                         self.gpu_id, dtype=torch.float
                     )
-            labels = labels.to(self.gpu_id)
-            # feature1=feature1.to(self.gpu_id)
-            # feature2=feature2.to(self.gpu_id)
+            
         else:
             data_need_to_cuda=data_need_to_cuda.to(self.gpu_id)
-            labels=labels.to(self.gpu_id)
-            feature1=feature1.to(self.gpu_id)
-            feature2=feature2.to(self.gpu_id)
-            
+        labels = labels.to(self.gpu_id)
+        contents={}
+        contents['img_path']=img_path
+
+        # 一些额外信息
+        contents['epoch']=epoch
+        contents['mode']=mode
+        contents['criterion']=self.criterion
+        contents['labels']=labels
+        contents['input']=data_need_to_cuda
+        contents['extra']={}
+        contents['extra']['delta']=self.args['extra']['delta']
         if mode=='train':
             self.optimizer.zero_grad()
-            loss_single=self.model(epoch,mode,self.criterion,labels,contents,self.args['extra']['delta'],data_need_to_cuda[0],data_need_to_cuda[1])
+            # loss_single=self.model(epoch,mode,self.criterion,labels,contents,self.args['extra']['delta'],data_need_to_cuda[0],data_need_to_cuda[1])
+            loss_single=self.model(**contents)
 
 
             loss_single.backward()
@@ -484,10 +503,12 @@ class Trainer:
         
         elif mode=='eval':
             with torch.no_grad():
-                return self.model(epoch,mode,self.criterion,labels,contents,self.args['extra']['delta'],data_need_to_cuda[0],data_need_to_cuda[1])
+                return self.model(**contents)
+                # return self.model(epoch,mode,self.criterion,labels,contents,self.args['extra']['delta'],data_need_to_cuda[0],data_need_to_cuda[1])
         elif mode=='predict':
             with torch.no_grad():
-                return self.model(epoch,mode,self.criterion,labels,contents,self.args['extra']['delta'],data_need_to_cuda[0]),data_need_to_cuda[1]
+                return self.model(**contents),img_path
+                # return self.model(**contents),data_need_to_cuda[1]
         
         
 
@@ -533,5 +554,5 @@ class Trainer:
             os.path.join(self.snapshot_path,self.args['model_path']['snapshot'])
         )
         self.logger.info(
-            f"Epoch {epoch} Training snapshot saved at snapshot_path/{self.args['model_path']['snapshot']}"
+            f"Epoch {epoch} Training snapshot saved at {self.snapshot_path}/{self.args['model_path']['snapshot']}"
         )

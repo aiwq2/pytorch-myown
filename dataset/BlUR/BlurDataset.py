@@ -20,10 +20,10 @@ class BlurPair(Dataset):
             self.dataset=Path(__file__).parent/'evl_once'
 
         self.train_file_dir='editor_merge'
-        self.test_file_dir=Path(__file__).parent/'test2'
+        self.test_file_dir=Path(__file__).parent/'url_270000'
 
         if mode=='predict':
-            self.train_file_dir='online_test_img2'
+            self.train_file_dir='url_270000_img_1w-2w'
         self.img_pairs=[]
         self.labels=[]
         if mode=='train' or mode=='eval':
@@ -76,12 +76,10 @@ class BlurPair(Dataset):
             path1=Path(__file__).parent/self.train_file_dir/img1
             PIL_img1=Image.open(path1).convert('RGB')
             PIL_img1=self.preprocess(PIL_img1)
-            # return [PIL_img0,PIL_img1],label,[img0,img1],self.calculate_local_clarity(str(path0)),self.calculate_local_clarity(str(path1))
             return [PIL_img0,PIL_img1],label,[img0,img1]
         else:
-            # return [PIL_img0,img0],label,[img0,img1],self.calculate_local_clarity(str(path0)),self.calculate_local_clarity(str(path1))
-            # 后面的img0,img0只是为了统一占位，并没有具体的作用
-            return [PIL_img0,img0],label,[img0,img0]
+            # 最后都要返回img_path用于数据分析
+            return [PIL_img0,img0],label,img0
 
     def calculate_local_clarity(self,image_path, grid_size=(5, 5)):
         # 总特征数为grid_size[0]*grid_size[1]+4
@@ -215,3 +213,56 @@ class BlurPairFeature(Dataset):
         # features_tensor=F.normalize(features_tensor,dim=0)
         # print(features_tensor)
         return features_tensor
+
+class BlurSingle(Dataset):
+    # 图片标签的名字
+    BLURRY='blur'
+    CLEAR='clear'
+    def __init__(self,mode='train') -> None:
+        super().__init__()
+        self.train_file_dir=Path(__file__).parent/'gptv_2cls'
+        # self.test_file_dir=Path(__file__).parent/'url_100000'
+        if mode=='train':
+            self.train_file_dir=Path(__file__).parent/'gptv_2cls/train'
+        if mode=='eval':
+            self.train_file_dir=Path(__file__).parent/'gptv_2cls/val'
+        self.predict_file_dir=Path(__file__).parent/'test_blur_iter2_single_img'
+        self.imgs=[]
+        if mode=='train' or mode=='eval':
+            self.root=self.train_file_dir
+            for label in os.listdir(self.root):
+                label_path=os.path.join(self.root,label)
+                for img_name in os.listdir(label_path):
+                    image_path=os.path.join(label_path,img_name)
+                    self.imgs.append(image_path)
+        elif mode=='predict':
+            for img_name in os.listdir(self.predict_file_dir):
+                image_path=os.path.join(self.predict_file_dir,img_name)
+                self.imgs.append(image_path)
+        else:
+            raise ValueError('mode should be train or predict')
+        
+        if mode=='train' or mode=='eval':
+            self.preprocess=transforms.Compose([
+                transforms.Resize((256,256)),
+                # transforms.RandomHorizontalFlip(),
+                # transforms.RandomVerticalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+        else:
+            self.preprocess=transforms.Compose([
+                transforms.Resize((256,256)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) 
+            ])
+
+
+    def __len__(self):
+        return len(self.imgs)
+
+    def __getitem__(self, index):
+        img_path=self.imgs[index]
+        label=1 if self.BLURRY in img_path else 0
+        img=self.preprocess(Image.open(img_path).convert('RGB'))
+        return img,label,img_path

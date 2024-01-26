@@ -1,25 +1,24 @@
 modal: 'img'
-mode: 'train' # train,eval,predict
+mode: 'predict' # train,eval,predict
 use_tensorboard: False
-get_from_snapshot: False # 控制是否使用snapshot中的model
+get_from_snapshot: True # 控制是否使用snapshot中的model
 model_path:
   save: True # 是否需要保存模型
   snapshot_dir: "save_models/blur" # 模型保存的根目录为save_models，这个是提前自己创建好的目录
-  snapshot: "best_snapshot.pt"
+  snapshot: "best_snapshot_0.76_iteration12.pt"
 split_dataset: True
 split_test_ratio: 0.2
-criterion: "PairwiseLoss" # 支持loss文件夹下所有的loss
+criterion: "CrossEntropyLoss" # 支持loss文件夹下所有的loss以及CrossEntropyLoss
 optimizer: "AdamW" # 目前支持AdamW,SGD
 scheduler:
   name: "constant" # constant、constant_with_warmup、linear、polynomial、cosine 和cosine_with_restarts
   ratio: 0.3
-metrics: "Recall_Precision_F1score" # F1score,Precision,Recall,使用的时候之间用下划线分割
-main_metric: "F1score" # 可用于early stop
+main_metric: "F1score" # 可用于early stop,还可以使用的有Recall_macro，Precision_macro'
 metric_average: "macro" # macro会对metric进行平均，如果为"None"，则得到多个标签的metric，并且也无法用main_matric来进行early stop，这个参数用于绘制tensorboard时进行绘制
 batch_size:
-  train: 64
-  eval: 64
-  predict: 4
+  train: 128
+  eval: 128
+  predict: 256
 max_epochs: 50
 wd: 0.001
 momentum: 0 # SGD优化器中可能用到

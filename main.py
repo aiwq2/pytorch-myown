@@ -6,8 +6,8 @@ from trainer import Trainer
 from utils.get_bert_and_tokenizer import getBert
 from torch.distributed import destroy_process_group
 from dataset.MNIST import MNIST_Test_data,MNIST_Train_data
-from dataset.BlUR.BlurDataset import BlurPair,BlurPairFeature
-from model.Resnet import ResNet
+from dataset.BlUR.BlurDataset import *
+from model.Resnet import *
 from model.VIT import VIT
 from model.CNN import LinearNet
 from model.general.model_init import xavier_init_model,kaiming_init_model
@@ -27,7 +27,8 @@ if __name__=='__main__':
     # print(os.environ['RANK'])
     # print(os.environ['LOCAL_RANK'])
     # print(os.environ['WORLD_SIZE'])
-
+    
+    # 如果要使用机器学习模型例如GBDT，请移步machine_learning_method/train.py使用
     args=config_args()
     for k,v in sorted(args.items(),key=lambda x:x[0]):
         args['logger'].info(f'{k}:{v}')
@@ -38,20 +39,18 @@ if __name__=='__main__':
     if os.path.exists('score_delta.csv'):
         args['logger'].info('score_delta exists,remove score_delta.csv')
         os.remove('score_delta.csv')
-    # if os.path.exists('score_delta_LinearNet.csv'):
-    #     args['logger'].info('score_delta exists,remove score_delta_LinearNet.csv')
-    #     os.remove('score_delta_LinearNet.csv')
+
 
     # 定义dataset
-    train_dataset=BlurPair(mode='train')
-    eval_dataset=BlurPair(mode='eval')
+    train_dataset=BlurSingle(mode='train')
+    eval_dataset=BlurSingle(mode='eval')
     predict_dataset=BlurPair(mode='predict')
 
     # 划分训练集和验证集
-    if args['split_dataset'] and eval_dataset is None:
+    if args['mode']!='predict' and args['split_dataset'] and (isinstance(eval_dataset,list) and len(eval_dataset)==0):
         train_dataset,eval_dataset=dataset_split_torch(train_dataset,test_size=args['split_test_ratio'])
     
-    # 保存训练集和验证集
+    # 保存训练集和验证集的信息到对应的txt文件中
     # for index,dataset in enumerate([train_dataset,eval_dataset]):
     #     file_name=''
     #     if index==0:
@@ -70,14 +69,18 @@ if __name__=='__main__':
 
            
     
-    # 定义
+    # 定义模型以及模型初始化
     model=ResNet()
     model.blur.apply(kaiming_init_model)
+    # model=ResNet()
+    # model.blur.apply(kaiming_init_model)
 
+    # 记录数据集相关信息
     args['logger'].info(f'train_dataset total length:{len(train_dataset)},eval_dataset total length:{len(eval_dataset) if eval_dataset else 0}, predict_dataset total length:{len(predict_dataset)}')
     args['logger'].info(f'train_dataset:{train_dataset.__class__.__name__}')
     args['logger'].info(f'model:{model.__class__.__name__}')
 
+    # 构造训练对象
     trainer=Trainer(
         args=args,
         model=model,
@@ -86,6 +89,7 @@ if __name__=='__main__':
         predict_dataset=predict_dataset
     )
 
+    # 依据config中的mode进行训练、验证或者预测
     if args["mode"] == "train":
         trainer.train()
     elif args["mode"] == "eval":
