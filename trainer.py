@@ -428,7 +428,7 @@ class Trainer:
             dataloader=self.predict_dataloader, task_id=rich_predict_step_id
         )
         # self.logger.info(result)
-        file_save='url_270000_img_1w-2w.txt'
+        file_save='predict_result_0.6.txt'
         if len(result[0])==3:
             with open(file_save,'w') as out:
                 for label,pred,img in result:
@@ -436,11 +436,11 @@ class Trainer:
                         label='1'
                     else:
                         label='0'
-                    out.write(f'{img},{label},{str(pred)}\n')
+                    out.write(f'{img},{label},{str(round(pred,2))}\n')
         elif len(result[0])==2:
             with open(file_save,'w') as out:
                 for pred,img in result:
-                    out.write(f'{img},{str(pred.item())}\n')
+                    out.write(f'{img},{str(round(pred.item(),2))}\n')
         else:
             raise ValueError('result length is not 2 or 3')
         self.logger.info(f"Predict Result Saved at {file_save}")

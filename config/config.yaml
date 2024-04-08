@@ -4,8 +4,8 @@ use_tensorboard: False
 get_from_snapshot: True # 控制是否使用snapshot中的model
 model_path:
   save: True # 是否需要保存模型
-  snapshot_dir: "save_models/blur" # 模型保存的根目录为save_models，这个是提前自己创建好的目录
-  snapshot: "best_snapshot_0.76_iteration12.pt"
+  snapshot_dir: "save_models/blur_single" # 模型保存的根目录为save_models，这个是提前自己创建好的目录
+  snapshot: "best_snapshot_iter11.pt"
 split_dataset: True
 split_test_ratio: 0.2
 criterion: "CrossEntropyLoss" # 支持loss文件夹下所有的loss以及CrossEntropyLoss

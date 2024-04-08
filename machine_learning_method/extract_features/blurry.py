@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 from scipy.stats import entropy
 import math
+from sklearn.decomposition import TruncatedSVD
 
 # canny算子，分数越小越模糊
 def canny(image):
@@ -22,7 +23,7 @@ def canny(image):
     所有梯度值高于高阈值的像素被认为是强边缘。
     像素的梯度值介于低阈值和高阈值之间的情况被认为是中等强度的边缘。这些像素将被保留，但只有当它们与强边缘连接时才会被认为是最终的边缘像素。
     '''
-    edges=cv2.Canny(image,100,200)
+    edges=cv2.Canny(np.uint8(image),100,200)
     return np.mean(edges)
 
 # 拉普拉斯算子，分数越小越模糊
@@ -30,7 +31,148 @@ def variance_of_laplacian(image):
     '''
     计算图像的laplacian响应的方差值
     '''
-    return cv2.Laplacian(image, cv2.CV_64F).var()
+    return cv2.Laplacian(np.uint8(image), cv2.CV_64F).var()
+
+
+# 通过傅里叶变换分析图像的频率内容，模糊图像通常缺乏高频信息
+def fourier_transform(image):
+    f=np.fft.fft2(image)
+    fshift=np.fft.fftshift(f)
+    magnitude_spectrum=20*np.log(np.abs(fshift))
+    return np.mean(magnitude_spectrum)
+
+
+# 图像熵，图像熵是图像信息内容的度量，可以反应图像的复杂度和纹理信息
+
+def image_entropy(image):
+    # gitpilot的代码
+    image=np.uint8(image)
+    entropy=cv2.calcHist([image],[0],None,[256],[0,256])
+    entropy=np.squeeze(entropy)
+    entropy=entropy[entropy>0]
+    ent=-np.sum(entropy*np.log2(entropy))
+    # ent=-np.mean(entropy*np.log2(entropy))
+
+    # gpt的代码
+    # histogram,_=np.histogram(image,bins=256,range=(0,1))
+    # histo_norm=histogram/np.sum(histogram)
+    # ent=entropy(histo_norm)
+    return ent
+
+# 颜色饱和度，色彩饱和度可以反应图像的生动度。某些情况下，饱和度低可能意味着图像模糊
+def color_saturation(image_path):
+     image=cv2.imread(image_path)
+     hsv_image=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
+     saturation=hsv_image[:,:,1]
+     mean_saturation=np.mean(saturation)
+     return mean_saturation
+
+# 图像亮度，过亮或过暗的图像可能会显得模糊
+def image_brightness(image):
+    image=cv2.imread(image)
+    hsv_image=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
+    brightness=hsv_image[:,:,2]
+    mean_brightness=np.mean(brightness)
+    return mean_brightness
+
+# 下面的方法来自于知乎，上面的方法来自于gpt4
+
+
+#SMD2梯度函数计算
+def SMD2(img):
+    """
+    :param img: ndarray 二维灰度图像
+    :return: float 图像越清晰越大
+    """
+    diff_x = np.abs(img[:-1, :-1] - img[1:, :-1])
+    diff_y = np.abs(img[:-1, :-1] - img[:-1, 1:])
+
+    # out = np.sum(diff_x * diff_y)
+    out = np.mean(diff_x * diff_y)
+
+    return float(out)
+
+
+#方差函数计算
+def variance(img):
+    """
+    :param img: ndarray 二维灰度图像
+    :return: float 图像越清晰越大
+    """
+    u = np.mean(img)
+    # out = np.sum((img - u)**2)
+    out = np.mean((img - u)**2)
+
+    return float(out)
+
+
+#energy函数计算
+def energy(img):
+    """
+    :param img: ndarray 二维灰度图像
+    :return: float 图像越清晰越大
+    """
+    diff_x = np.square(img[1:, :-1] - img[:-1, :-1])
+    diff_y = np.square(img[:-1, 1:] - img[:-1, :-1])
+
+    # out = np.sum(diff_x * diff_y)
+    out = np.mean(diff_x * diff_y)
+
+    return float(out)
+
+#brenner梯度函数计算
+def brenner(img):
+    '''
+    :param img:narray 二维灰度图像
+    :return: float 图像越清晰越大
+    '''
+    shape = np.shape(img)
+    out = 0
+    # for x in range(0, shape[0]-2):
+    #     for y in range(0, shape[1]):
+    #         out+=(int(img[x+2,y])-int(img[x,y]))**2
+    # out=np.sum(np.square(img[:-2,:]-img[2:,:]))
+    out=np.mean(np.square(img[:-2,:]-img[2:,:]))
+    return out
+
+#Vollath函数计算
+def Vollath(img):
+    '''
+    :param img:narray 二维灰度图像
+    :return: float 图像越清晰越大
+    '''
+    shape = np.shape(img)
+    u = np.mean(img)
+    out = -shape[0]*shape[1]*(u**2)
+    # for x in range(0, shape[0]-1):
+    #     for y in range(0, shape[1]):
+    #         out+=int(img[x,y])*int(img[x+1,y])
+    # out=np.sum(img[:-1,:]*img[1:,:])
+    out = (out+np.sum(img[:-1, :] * img[1:, :]))/((shape[0]-1)*(shape[1]))
+    # out = out+np.sum(img[:-1, :] * img[1:, :])
+    return out
+
+# 值在0-1之间，越大越模糊
+# https://github.com/fled/blur_detection/tree/master
+def get_svd_blur_degree(img, sv_num=10):
+    # u, s, v = np.linalg.svd(img)
+    # top_sv = np.sum(s[0:sv_num])
+    # total_sv = np.sum(s)
+    # return top_sv/total_sv
+    svd = TruncatedSVD(n_components=sv_num)
+    u_s_approx = svd.fit_transform(img)
+    s_approx = svd.singular_values_
+    
+    top_sv = np.sum(s_approx)
+    total_sv = np.linalg.norm(img, 'fro')
+    
+    return top_sv/total_sv
+
+
+
+
+
+# 尚未使用的feature
 
 # 快速傅里叶变换,分数越小越模糊
 def fast_fourier_transform(image, size=60):
@@ -66,13 +208,6 @@ def fast_fourier_transform(image, size=60):
     # magnitudes is less than the threshold value
     return mean
 
-# 通过傅里叶变换分析图像的频率内容，模糊图像通常缺乏高频信息
-def fourier_transform(image):
-    f=np.fft.fft2(image)
-    fshift=np.fft.fftshift(f)
-    magnitude_spectrum=20*np.log(np.abs(fshift))
-    return np.mean(magnitude_spectrum)
-
 # 图像对比度,对比度低的图像可能会显得模糊。可以通过计算图像的全局对比度或者局部对比度来评估清晰度
 def image_contrast(image):
      min_intensity=np.min(image)
@@ -80,38 +215,6 @@ def image_contrast(image):
      contrast=(max_intensity-min_intensity)/(max_intensity+min_intensity)
      return contrast
 
-# 图像熵，图像熵是图像信息内容的度量，可以反应图像的复杂度和纹理信息
-
-def image_entropy(image):
-    # gitpilot的代码
-    entropy=cv2.calcHist([image],[0],None,[256],[0,256])
-    entropy=np.squeeze(entropy)
-    entropy=entropy[entropy>0]
-    ent=-np.sum(entropy*np.log2(entropy))
-
-    # gpt的代码
-    # histogram,_=np.histogram(image,bins=256,range=(0,1))
-    # histo_norm=histogram/np.sum(histogram)
-    # ent=entropy(histo_norm)
-    return ent
-
-# 颜色饱和度，色彩饱和度可以反应图像的生动度。某些情况下，饱和度低可能意味着图像模糊
-def color_saturation(image_path):
-     image=cv2.imread(image_path)
-     hsv_image=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
-     saturation=hsv_image[:,:,1]
-     mean_saturation=np.mean(saturation)
-     return mean_saturation
-
-# 图像亮度，过亮或过暗的图像可能会显得模糊
-def image_brightness(image):
-    image=cv2.imread(image)
-    hsv_image=cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
-    brightness=hsv_image[:,:,2]
-    mean_brightness=np.mean(brightness)
-    return mean_brightness
-
-# 下面的方法来自于知乎，上面的方法来自于gpt4
 #SMD梯度函数计算
 def SMD(img):
     '''
@@ -124,74 +227,6 @@ def SMD(img):
         for y in range(0, shape[1]):
             out+=math.fabs(int(img[x,y])-int(img[x,y-1]))
             out+=math.fabs(int(img[x,y]-int(img[x+1,y])))
-    return out
-
-#SMD2梯度函数计算
-
-def SMD2(img):
-    """
-    :param img: ndarray 二维灰度图像
-    :return: float 图像越清晰越大
-    """
-    diff_x = np.abs(img[:-1, :-1] - img[1:, :-1])
-    diff_y = np.abs(img[:-1, :-1] - img[:-1, 1:])
-
-    out = np.sum(diff_x * diff_y)
-
-    return float(out)
-
-
-#brenner梯度函数计算
-def brenner(img):
-    '''
-    :param img:narray 二维灰度图像
-    :return: float 图像越清晰越大
-    '''
-    shape = np.shape(img)
-    out = 0
-    for x in range(0, shape[0]-2):
-        for y in range(0, shape[1]):
-            out+=(int(img[x+2,y])-int(img[x,y]))**2
-    return out
-
-#方差函数计算
-def variance(img):
-    """
-    :param img: ndarray 二维灰度图像
-    :return: float 图像越清晰越大
-    """
-    u = np.mean(img)
-    out = np.sum((img - u)**2)
-
-    return float(out)
-
-
-#energy函数计算
-def energy(img):
-    """
-    :param img: ndarray 二维灰度图像
-    :return: float 图像越清晰越大
-    """
-    diff_x = np.square(img[1:, :-1] - img[:-1, :-1])
-    diff_y = np.square(img[:-1, 1:] - img[:-1, :-1])
-
-    out = np.sum(diff_x * diff_y)
-
-    return float(out)
-
-
-#Vollath函数计算
-def Vollath(img):
-    '''
-    :param img:narray 二维灰度图像
-    :return: float 图像越清晰越大
-    '''
-    shape = np.shape(img)
-    u = np.mean(img)
-    out = -shape[0]*shape[1]*(u**2)
-    for x in range(0, shape[0]-1):
-        for y in range(0, shape[1]):
-            out+=int(img[x,y])*int(img[x+1,y])
     return out
 
 #entropy函数计算
@@ -207,3 +242,4 @@ def entropy(img):
         if p[i]!=0:
             out-=p[i]*math.log(p[i]/count)/count
     return out
+

@@ -10,3 +10,6 @@
 /*.txt
 /save_models/
 /dataset/BlUR/url_100000*
+/machine_learning_method/data_features/*
+/machine_learning_method/model/
+/machine_learning_method/wrong_classify_analyze/

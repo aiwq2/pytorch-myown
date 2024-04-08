@@ -223,10 +223,11 @@ class BlurSingle(Dataset):
         self.train_file_dir=Path(__file__).parent/'gptv_2cls'
         # self.test_file_dir=Path(__file__).parent/'url_100000'
         if mode=='train':
-            self.train_file_dir=Path(__file__).parent/'gptv_2cls/train'
+            self.train_file_dir=Path(__file__).parent/'iter9_image/train_iterate'
         if mode=='eval':
-            self.train_file_dir=Path(__file__).parent/'gptv_2cls/val'
-        self.predict_file_dir=Path(__file__).parent/'test_blur_iter2_single_img'
+            self.train_file_dir=Path(__file__).parent/'iter9_image/val'
+        # self.predict_file_dir=Path(__file__).parent/'test_blur_iter2_single_img'
+        self.predict_file_dir=Path(__file__).parent/'improve_test'
         self.imgs=[]
         if mode=='train' or mode=='eval':
             self.root=self.train_file_dir

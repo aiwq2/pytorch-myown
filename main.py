@@ -44,7 +44,7 @@ if __name__=='__main__':
     # 定义dataset
     train_dataset=BlurSingle(mode='train')
     eval_dataset=BlurSingle(mode='eval')
-    predict_dataset=BlurPair(mode='predict')
+    predict_dataset=BlurSingle(mode='predict')
 
     # 划分训练集和验证集
     if args['mode']!='predict' and args['split_dataset'] and (isinstance(eval_dataset,list) and len(eval_dataset)==0):
@@ -70,8 +70,8 @@ if __name__=='__main__':
            
     
     # 定义模型以及模型初始化
-    model=ResNet()
-    model.blur.apply(kaiming_init_model)
+    model=BlurSingleResNet()
+    model.single_blur.apply(kaiming_init_model)
     # model=ResNet()
     # model.blur.apply(kaiming_init_model)
 
